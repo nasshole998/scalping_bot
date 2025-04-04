@@ -31,6 +31,7 @@ class TradeBarAggregator:
         self.timeframe = timeframe
         self.current_bar = None
         self.trades = []
+        self.last_finalized_timestamp = None
 
     def add_trade(self, trade):
         print(f"Adding trade: {trade.price} @ {trade.timestamp}")  # Debugging info
@@ -74,24 +75,29 @@ class TradeBarAggregator:
         self.current_bar['trade_count'] += 1
 
     def _finalize_current_bar(self):
-        if self.current_bar:
+        if self.current_bar and self.current_bar['timestamp'] != self.last_finalized_timestamp:
             df = pd.DataFrame([self.current_bar])
             df.to_csv(f"data/raw/{self.symbol}_raw.csv", mode='a', header=False, index=False)
             print(f"Finalized bar: {self.current_bar['timestamp']}")  # Debugging info
             # Pass the finalized bar to the processor
             processor.add_raw_data(df)
-            return df
+            self.last_finalized_timestamp = self.current_bar['timestamp']
 
 class DataProcessor:
     def __init__(self):
         self.raw_data = deque(maxlen=DATA_QUEUE_SIZE)
         self.processed_data = deque(maxlen=DATA_QUEUE_SIZE)
         self.indicators = {}
+        self.last_processed_timestamp = None
+        self.historical_data_loaded = False
 
     def add_raw_data(self, data):
-        print(f"Adding raw data to processor: {data['timestamp'].iloc[0]}")  # Debugging info
-        self.raw_data.append(data)
-        self._process_data()
+        # Avoid adding duplicate data
+        if not self.raw_data or data['timestamp'].iloc[0] != self.last_processed_timestamp:
+            print(f"Adding raw data to processor: {data['timestamp'].iloc[0]}")  # Debugging info
+            self.raw_data.append(data)
+            self.last_processed_timestamp = data['timestamp'].iloc[0]
+            self._process_data()
 
     def _process_data(self):
         print(f"Processing data with length: {len(self.raw_data)}")  # Debugging info
@@ -125,14 +131,20 @@ class DataProcessor:
         if not self.processed_data.empty:
             file_path = f"data/processed/{SYMBOL}_processed.csv"
             header = not os.path.exists(file_path)
-            self.processed_data.to_csv(file_path, mode='a', header=header, index=False)
+            # Only save the latest row
+            latest_data = self.processed_data.iloc[-1].to_frame().T
+            latest_data.to_csv(file_path, mode='a', header=header, index=False)
             print(f"Data saved to {file_path}")  # Debugging info
 
     def load_historical_data(self, file_path):
-        if os.path.exists(file_path):
+        if os.path.exists(file_path) and not self.historical_data_loaded:
             try:
-                historical_data = pd.read_csv(file_path)
+                # Define column names based on the raw data structure
+                columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'vwap', 'trade_count']
+                historical_data = pd.read_csv(file_path, names=columns, header=None)
                 historical_data['timestamp'] = pd.to_datetime(historical_data['timestamp'])
+                # Remove duplicates based on timestamp
+                historical_data = historical_data.drop_duplicates(subset='timestamp')
                 for _, row in historical_data.iterrows():
                     bar_data = pd.DataFrame([{
                         'timestamp': row['timestamp'],
@@ -144,7 +156,8 @@ class DataProcessor:
                         'vwap': row['vwap'],
                         'trade_count': row['trade_count']
                     }])
-                    self.raw_data.append(bar_data)
+                    self.add_raw_data(bar_data)
+                self.historical_data_loaded = True
                 print(f"Loaded {len(historical_data)} historical data points")
             except Exception as e:
                 print(f"Error loading historical data: {e}")
