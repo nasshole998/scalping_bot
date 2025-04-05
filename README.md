@@ -71,7 +71,7 @@ scalping_bot/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/scalping_bot.git
+git clone https://github.com/nasshole998/scalping_bot.git
 cd scalping_bot
 ```
 
