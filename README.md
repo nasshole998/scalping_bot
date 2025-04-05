@@ -106,7 +106,7 @@ python data_streaming/alpaca_stream.py
 
 - Paper trading only by default. To go live, change the `BASE_URL` to Alpaca’s live URL.
 - This bot uses the free `iex` feed from Alpaca but you can change to the subscription version.
-- Data gets saved to `data/processed/AAPL_live_data.csv`
+- Data gets saved to `data/processed/live_data.csv`
 
 
 ## License
