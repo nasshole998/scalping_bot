@@ -71,7 +71,7 @@ scalping_bot/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/scalping_bot.git
+git clone https://github.com/nasshole998/scalping_bot.git
 cd scalping_bot
 ```
 
@@ -106,7 +106,7 @@ python data_streaming/alpaca_stream.py
 
 - Paper trading only by default. To go live, change the `BASE_URL` to Alpaca’s live URL.
 - This bot uses the free `iex` feed from Alpaca but you can change to the subscription version.
-- Data gets saved to `data/processed/AAPL_live_data.csv`
+- Data gets saved to `data/processed/live_data.csv`
 
 
 ## License
