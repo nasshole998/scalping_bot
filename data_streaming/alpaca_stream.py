@@ -7,6 +7,10 @@ from alpaca_trade_api.stream import Stream
 from alpaca_trade_api.rest import REST
 from dotenv import load_dotenv
 
+# These will be shared across modules
+processor = None
+aggregator = None
+
 # Load environment variables
 load_dotenv()
 
@@ -93,11 +97,17 @@ class DataProcessor:
 
     def add_raw_data(self, data):
         # Avoid adding duplicate data
-        if not self.raw_data or data['timestamp'].iloc[0] != self.last_processed_timestamp:
-            print(f"Adding raw data to processor: {data['timestamp'].iloc[0]}")  # Debugging info
+        try:
+            timestamp = data['timestamp'].iloc[0]
+        except AttributeError:
+            timestamp = pd.to_datetime(data['timestamp']).values[0]  # Fallback if not a Series
+
+        if not self.raw_data or timestamp != self.last_processed_timestamp:
+            print(f"Adding raw data to processor: {timestamp}")  # Debugging info
             self.raw_data.append(data)
-            self.last_processed_timestamp = data['timestamp'].iloc[0]
+            self.last_processed_timestamp = timestamp
             self._process_data()
+
 
     def _process_data(self):
         print(f"Processing data with length: {len(self.raw_data)}")  # Debugging info
@@ -171,9 +181,10 @@ async def handle_trade_update(trade):
         print(f"Error handling trade: {e}")
 
 async def start_stream():
-    global aggregator, processor
-    aggregator = TradeBarAggregator(SYMBOL, TIME_FRAME)
-    processor = DataProcessor()
+    from data_streaming import alpaca_stream  # Yes, self-import
+    alpaca_stream.processor = DataProcessor()
+    alpaca_stream.aggregator = TradeBarAggregator(SYMBOL, TIME_FRAME)
+
 
     # Load historical data
     historical_file = f"data/raw/{SYMBOL}_raw.csv"

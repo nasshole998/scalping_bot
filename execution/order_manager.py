@@ -1,8 +1,8 @@
 # execution/order_manager.py
 
-from alpaca_trade_api.rest import REST, TimeInForce, OrderSide
 import os
 from dotenv import load_dotenv
+from alpaca_trade_api.rest import REST
 from execution.risk_management import RiskManager
 
 load_dotenv()
@@ -18,54 +18,71 @@ class OrderManager:
     def __init__(self, symbol):
         self.symbol = symbol
 
-    # order_manager.py (replace place_order method)
-
-    def place_order(self, signal):
+    def place_bracket_order(self, signal):
         if signal not in ["buy", "sell"]:
             print("No actionable signal.")
-            return
+            return None
 
-        if not self.risk_manager.can_trade():
-            print("RiskManager: Trade not allowed.")
-            return
+        if not risk.is_trade_allowed(signal, self.symbol):
+            print("Trade blocked by risk manager.")
+            return None
 
-        qty = self.risk_manager.calculate_position_size()
-        side = signal
+        qty = risk.get_position_size(self.symbol)
+        price = float(rest_api.get_latest_trade(self.symbol).price)
 
-        # Bracket config (tight for scalping)
-        take_profit_pct = 0.003  # +0.3%
-        stop_loss_pct = 0.0025   # -0.25%
+        take_profit_pct = 0.005  # 0.5% target
+        stop_loss_pct = 0.003    # 0.3% SL
 
-        market_price = self.get_market_price()
-        if market_price is None:
-            print("Failed to get market price.")
-            return
-
-        take_profit = round(market_price * (1 + take_profit_pct), 2)
-        stop_loss = round(market_price * (1 - stop_loss_pct), 2)
-        if side == "sell":
-            take_profit = round(market_price * (1 - take_profit_pct), 2)
-            stop_loss = round(market_price * (1 + stop_loss_pct), 2)
+        if signal == "buy":
+            take_profit_price = round(price * (1 + take_profit_pct), 2)
+            stop_loss_price = round(price * (1 - stop_loss_pct), 2)
+        else:
+            take_profit_price = round(price * (1 - take_profit_pct), 2)
+            stop_loss_price = round(price * (1 + stop_loss_pct), 2)
 
         try:
-            order = self.api.submit_order(
+            order = rest_api.submit_order(
                 symbol=self.symbol,
                 qty=qty,
-                side=side,
+                side=signal,
                 type="market",
-                time_in_force="gtc",
+                time_in_force="day",
                 order_class="bracket",
-                take_profit={"limit_price": take_profit},
-                stop_loss={"stop_price": stop_loss}
+                take_profit={"limit_price": take_profit_price},
+                stop_loss={"stop_price": stop_loss_price}
             )
-            print(f"[{side.upper()}] Order placed: {qty} @ {market_price}")
+            print(f"[ORDER] Bracket {signal.upper()} order placed: {order.id}")
+            return order
         except Exception as e:
-            print(f"Error placing order: {e}")
-    
-    def get_market_price(self):
-        try:
-            quote = self.api.get_latest_trade(self.symbol)
-            return float(quote.price)
-        except Exception as e:
-            print(f"Error getting market price: {e}")
+            print(f"[ERROR] Bracket order failed: {e}")
             return None
+
+    def get_open_position(self):
+        try:
+            positions = rest_api.list_positions()
+            for p in positions:
+                if p.symbol == self.symbol:
+                    return {
+                        "qty": float(p.qty),
+                        "side": "long" if float(p.qty) > 0 else "short",
+                        "avg_entry_price": float(p.avg_entry_price)
+                    }
+            return None
+        except Exception as e:
+            print(f"[ERROR] Fetching position failed: {e}")
+            return None
+
+    def close_position(self):
+        try:
+            position = self.get_open_position()
+            if position:
+                side = "sell" if position["side"] == "long" else "buy"
+                rest_api.close_position(self.symbol)
+                print(f"[ORDER] Closed {side.upper()} position on {self.symbol}")
+                return True
+            else:
+                print(f"[INFO] No open position to close for {self.symbol}")
+                return False
+        except Exception as e:
+            print(f"[ERROR] Failed to close position: {e}")
+            return False

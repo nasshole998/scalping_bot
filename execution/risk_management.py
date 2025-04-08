@@ -1,26 +1,37 @@
-# risk_manager.py
-
-from execution.position_tracker import PositionTracker
+# execution/risk_management.py
 
 class RiskManager:
-    def __init__(self, symbol, api):
-        self.symbol = symbol
-        self.api = api
-        self.position_tracker = PositionTracker(symbol, api)
+    def __init__(self, rest_api, max_position_pct=0.05, max_open_trades=1):
+        self.rest_api = rest_api
+        self.max_position_pct = max_position_pct
+        self.max_open_trades = max_open_trades
 
-    def can_trade(self):
-        # For now, only one position at a time
-        return not self.position_tracker.is_in_position()
-
-    def calculate_position_size(self):
+    def is_trade_allowed(self, signal, symbol):
         try:
-            account = self.api.get_account()
-            buying_power = float(account.cash)
-            risk_fraction = 0.05  # Risk up to 5% of capital
-            max_trade_value = buying_power * risk_fraction
-            market_price = self.api.get_latest_trade(self.symbol).price
-            qty = int(max_trade_value / market_price)
-            return max(1, qty)
+            positions = self.rest_api.list_positions()
+            if len(positions) >= self.max_open_trades:
+                print("[RISK] Too many open positions.")
+                return False
+
+            for p in positions:
+                if p.symbol == symbol:
+                    if signal == "buy" and float(p.qty) > 0:
+                        return False
+                    if signal == "sell" and float(p.qty) < 0:
+                        return False
+
+            return True
         except Exception as e:
-            print(f"Error calculating position size: {e}")
+            print(f"[RISK ERROR] Failed risk check: {e}")
+            return False
+
+    def get_position_size(self, symbol):
+        try:
+            account = self.rest_api.get_account()
+            cash = float(account.cash)
+            position_value = self.max_position_pct * cash
+            latest_price = float(self.rest_api.get_latest_trade(symbol).price)
+            return max(1, int(position_value // latest_price))
+        except Exception as e:
+            print(f"[RISK ERROR] Position sizing failed: {e}")
             return 1
