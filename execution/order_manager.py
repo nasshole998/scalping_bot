@@ -1,5 +1,3 @@
-# execution/order_manager.py
-
 import os
 from dotenv import load_dotenv
 from alpaca_trade_api.rest import REST
@@ -9,7 +7,7 @@ load_dotenv()
 
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
-BASE_URL = "https://paper-api.alpaca.markets"
+BASE_URL = "https://paper-api.alpaca.markets"  # Corrected URL
 
 rest_api = REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, BASE_URL)
 risk = RiskManager(rest_api)
@@ -27,20 +25,20 @@ class OrderManager:
             print("Trade blocked by risk manager.")
             return None
 
-        qty = risk.get_position_size(self.symbol)
-        price = float(rest_api.get_latest_trade(self.symbol).price)
-
-        take_profit_pct = 0.005  # 0.5% target
-        stop_loss_pct = 0.003    # 0.3% SL
-
-        if signal == "buy":
-            take_profit_price = round(price * (1 + take_profit_pct), 2)
-            stop_loss_price = round(price * (1 - stop_loss_pct), 2)
-        else:
-            take_profit_price = round(price * (1 - take_profit_pct), 2)
-            stop_loss_price = round(price * (1 + stop_loss_pct), 2)
-
         try:
+            qty = risk.get_position_size(self.symbol)
+            price = float(rest_api.get_latest_trade(self.symbol).price)
+
+            take_profit_pct = 0.005  # 0.5% target
+            stop_loss_pct = 0.003    # 0.3% SL
+
+            if signal == "buy":
+                take_profit_price = round(price * (1 + take_profit_pct), 2)
+                stop_loss_price = round(price * (1 - stop_loss_pct), 2)
+            else:
+                take_profit_price = round(price * (1 - take_profit_pct), 2)
+                stop_loss_price = round(price * (1 + stop_loss_pct), 2)
+
             order = rest_api.submit_order(
                 symbol=self.symbol,
                 qty=qty,

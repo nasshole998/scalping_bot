@@ -1,3 +1,5 @@
+# strategies/composite_strategy.py
+
 import pandas as pd
 from .base import BaseStrategy
 from .ema_crossover import EMACrossoverStrategy
@@ -18,14 +20,18 @@ class CompositeStrategy(BaseStrategy):
         ]
 
     def generate_signal(self, df: pd.DataFrame) -> str:
-        signals = [strategy.generate_signal(df) for strategy in self.strategies]
-        vote_count = {"buy": 0, "sell": 0, "hold": 0}
-        for signal in signals:
-            vote_count[signal] += 1
-
-        if vote_count["buy"] > vote_count["sell"] and vote_count["buy"] > vote_count["hold"]:
-            return "buy"
-        elif vote_count["sell"] > vote_count["buy"] and vote_count["sell"] > vote_count["hold"]:
-            return "sell"
-        else:
+        if df.empty or not isinstance(df, pd.DataFrame):
             return "hold"
+
+        row = df.iloc[-1]
+        signals = [s.generate_signal(df) for s in self.strategies]
+        votes = {"buy": 0, "sell": 0, "hold": 0}
+
+        for s in signals:
+            votes[s] += 1
+
+        if votes["buy"] > votes["sell"] and votes["buy"] > votes["hold"]:
+            return "buy"
+        elif votes["sell"] > votes["buy"] and votes["sell"] > votes["hold"]:
+            return "sell"
+        return "hold"

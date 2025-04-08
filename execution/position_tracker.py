@@ -1,5 +1,3 @@
-# position_tracker.py
-
 class PositionTracker:
     def __init__(self, symbol, api):
         self.symbol = symbol
@@ -9,13 +7,21 @@ class PositionTracker:
 
     def refresh_position(self):
         try:
-            position = self.api.get_position(self.symbol)
-            self.current_position = {
-                "qty": float(position.qty),
-                "side": "buy" if float(position.qty) > 0 else "sell",
-                "entry_price": float(position.avg_entry_price)
-            }
-        except Exception:
+            positions = self.api.list_positions()
+            found = False
+            for p in positions:
+                if p.symbol == self.symbol:
+                    self.current_position = {
+                        "qty": float(p.qty),
+                        "side": "long" if float(p.qty) > 0 else "short",
+                        "entry_price": float(p.avg_entry_price)
+                    }
+                    found = True
+                    break
+            if not found:
+                self.current_position = None
+        except Exception as e:
+            print(f"Error refreshing position: {e}")
             self.current_position = None
 
     def is_in_position(self):

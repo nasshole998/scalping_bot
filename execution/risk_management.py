@@ -1,5 +1,3 @@
-# execution/risk_management.py
-
 class RiskManager:
     def __init__(self, rest_api, max_position_pct=0.05, max_open_trades=1):
         self.rest_api = rest_api
@@ -15,9 +13,9 @@ class RiskManager:
 
             for p in positions:
                 if p.symbol == symbol:
-                    if signal == "buy" and float(p.qty) > 0:
-                        return False
-                    if signal == "sell" and float(p.qty) < 0:
+                    current_side = "long" if float(p.qty) > 0 else "short"
+                    signal_side = "long" if signal == "buy" else "short"
+                    if current_side == signal_side:
                         return False
 
             return True
@@ -29,6 +27,9 @@ class RiskManager:
         try:
             account = self.rest_api.get_account()
             cash = float(account.cash)
+            if cash <= 0:
+                return 1  # Default to 1 share if no cash
+            
             position_value = self.max_position_pct * cash
             latest_price = float(self.rest_api.get_latest_trade(symbol).price)
             return max(1, int(position_value // latest_price))
